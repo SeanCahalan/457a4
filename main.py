@@ -52,10 +52,43 @@ def compress( inputFile, outputFile ):
  
   outputBytes = bytearray()
 
+  
+  i = 0
+  dictionary = {}
+  difs = []
   for y in range(img.shape[0]):
-    for x in range(img.shape[1]):
+    for x in range(1, img.shape[1]):
       for c in range(img.shape[2]):
-        outputBytes.append( img[y,x,c] )
+        dif = 0
+        if(img.shape[2] == 1): # single channel
+          dif = abs(int(img[y, x]) - int(img[y, x-1]))
+        else: # more channels
+          dif = abs(int(img[y, x, c]) - int(img[y, x-1, c]))
+
+        if not chr(dif) in dictionary:
+          dictionary[chr(dif)] = i
+          i += 1
+        difs.append(int(dif)/2)
+  
+  print "index is " + str(i)
+  print len(difs)
+
+  s = ''
+  for x in difs:
+    sx = s + chr(x)
+    if sx in dictionary:
+      s = sx
+    else:
+      byteArray = str( dictionary[s] ).encode()
+      for b in byteArray:
+        outputBytes.append(b)
+      # Add wc to the dictionary.
+      if len(dictionary) < 65536:
+        dictionary[sx] = i + 1
+        i += 1
+      s = chr(c)
+
+  print len(dictionary)
 
   endTime = time.time()
 
