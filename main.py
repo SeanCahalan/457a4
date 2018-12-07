@@ -75,7 +75,6 @@ def compress( inputFile, outputFile ):
     unencoded.write(str(d) + '\n')
   unencoded.close()
 
-  m = 0
   s = ''
   # loop through the differences and perform LZW compression
   for x in difs:
@@ -174,12 +173,17 @@ def uncompress( inputFile, outputFile ):
   for d in difs:
     decoded.write(str(d) + '\n')
   decoded.close()
-
-
-#   for y in range(rows):
-#     for x in range(columns):
-#       for c in range(channels):
-#         img[y,x,c] = byteIter.next()
+    
+  # go through each pixel in image and use difs to decode
+  for y in range(rows):
+    for x in range(1, columns):
+      for c in range(channels):
+        if len(difs) == 0:
+          break
+        if(channels == 1): # single channel
+          img[y,x] = img[y, x-1] + int(difs.pop(0))
+        else:
+          img[y,x,c] = img[y, x-1, c] + int(difs.pop(0))
 
   endTime = time.time()
 
