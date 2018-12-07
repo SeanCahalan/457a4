@@ -11,7 +11,7 @@
 #   python netpbm.py images/cortex.pnm
 
 
-import sys, os, math, time, netpbm
+import sys, os, math, time, netpbm, struct
 import numpy as np
 
 
@@ -53,9 +53,12 @@ def compress( inputFile, outputFile ):
   outputBytes = bytearray()
 
   
-  i = 0
-  dictionary = {}
+  index = 256
+  # create initial dict for LZW compression containing all possible differences
+  dictionary = dict( (chr(i), i) for i in xrange(index) )
   difs = []
+
+  # loop through each channel of each pixel and compute the predictive difference
   for y in range(img.shape[0]):
     for x in range(1, img.shape[1]):
       for c in range(img.shape[2]):
@@ -64,31 +67,31 @@ def compress( inputFile, outputFile ):
           dif = abs(int(img[y, x]) - int(img[y, x-1]))
         else: # more channels
           dif = abs(int(img[y, x, c]) - int(img[y, x-1, c]))
-
-        if not chr(dif) in dictionary:
-          dictionary[chr(dif)] = i
-          i += 1
-        difs.append(int(dif)/2)
+        difs.append(dif)
   
-  print "index is " + str(i)
-  print len(difs)
+  # for testing to check the similarity between uncompressed differences after decoding
+  unencoded = open('unencoded.txt', 'w')
+  for d in difs:
+    unencoded.write(str(d) + '\n')
+  unencoded.close()
 
+  m = 0
   s = ''
+  # loop through the differences and perform LZW compression
   for x in difs:
     sx = s + chr(x)
     if sx in dictionary:
       s = sx
     else:
-      byteArray = str( dictionary[s] ).encode()
-      for b in byteArray:
-        outputBytes.append(b)
-      # Add wc to the dictionary.
-      if len(dictionary) < 65536:
-        dictionary[sx] = i + 1
-        i += 1
-      s = chr(c)
-
-  print len(dictionary)
+      # turn index into 2 bytes
+      b = struct.pack('H', dictionary[s])
+      for byte in b:
+        outputBytes.append( byte )
+      # keep dictionary size below 65535 to enforce 2 byte indices
+      if len(dictionary) < 65535:
+        dictionary[sx] = index + 1
+        index += 1
+      s = chr(x)
 
   endTime = time.time()
 
@@ -141,10 +144,42 @@ def uncompress( inputFile, outputFile ):
   img = np.empty( [rows,columns,channels], dtype=np.uint8 )
 
   byteIter = iter(inputBytes)
-  for y in range(rows):
-    for x in range(columns):
-      for c in range(channels):
-        img[y,x,c] = byteIter.next()
+
+  index = 256
+  # build initial dict similar to before
+  dictionary = dict( (i, chr(i)) for i in xrange(index) )
+  difs = []
+  code = int(byteIter.next()) + int(byteIter.next()) * 256
+  S = dictionary[ code ]
+
+  # decompress LMV
+  while(len(inputBytes) > 0):
+    code = int(inputBytes.pop(0)) + int(inputBytes.pop(0)) * 256
+
+    if code in dictionary:
+      T = dictionary[ code ]
+    elif code == index:
+      T = T + T[0]
+
+    # add the decoded difference
+    for t in T:
+      difs.append( struct.unpack('b', t)[0] )
+
+    dictionary[index] = S + T[0]
+    index += 1
+    S = T
+
+  # debug to compare to original list of differences
+  decoded = open('decoded.txt', 'w')
+  for d in difs:
+    decoded.write(str(d) + '\n')
+  decoded.close()
+
+
+#   for y in range(rows):
+#     for x in range(columns):
+#       for c in range(channels):
+#         img[y,x,c] = byteIter.next()
 
   endTime = time.time()
 
